@@ -31,9 +31,15 @@ except ImportError:
 # ──────────────────────────────────────────────────────────
 load_dotenv()
 
-# Instanciar el client oficial de l'SDK de Gemini
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+# Intenta llegir la clau dels Secrets de Streamlit o del sistema local (.env)
+api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
+# Si no troba cap clau, mostra un avís clar abans de fallar
+if not api_key:
+    st.error("❌ No s'ha trobat la clau GEMINI_API_KEY als Secrets de Streamlit o al fitxer .env")
+    st.stop()
+
+client = genai.Client(api_key=api_key)
 FITXER_SESSIONS = "sessions_castella.json"
 
 # ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
