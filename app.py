@@ -44,6 +44,12 @@ api_key = str(api_key).strip().strip('"').strip("'")
 
 client = genai.Client(api_key=api_key)
 
+# CRIDA CORRECTA AMB LA NOVA LLIBRERIA:
+response = client.models.generate_content(
+    model="gemini-2.5-flash", contents="Hola!"
+)
+st.write(response.text)
+
 FITXER_SESSIONS = "sessions_castella.json"
 
 # ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
