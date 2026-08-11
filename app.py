@@ -39,17 +39,20 @@ if not api_key:
     st.error("❌ No s'ha trobat la clau GEMINI_API_KEY als Secrets de Streamlit o al fitxer .env")
     st.stop()
 
-# 👇 AFEGEIX NOMÉS AQUESTA LÍNIA: Neteja espais invisibles o cometes dobles
-api_key = str(api_key).strip().strip('"').strip("'")
+# Inicialitzar el client amb la clau neta
+client = genai.Client(api_key=str(api_key).strip())
 
-client = genai.Client(api_key=api_key)
-
-# CRIDA CORRECTA AMB LA NOVA LLIBRERIA:
-response = client.models.generate_content(
-    model="gemini-2.5-flash", contents="Hola!"
-)
-st.write(response.text)
-
+# 3. Executar la crida amb un model vàlid
+try:
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents="Hola!"
+    )
+    st.success("Connexió correcta amb Gemini!")
+    st.write(response.text)
+except Exception as e:
+    st.error(f"Error durant la generació: {e}")
+    
 FITXER_SESSIONS = "sessions_castella.json"
 
 # ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
