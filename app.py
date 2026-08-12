@@ -29,30 +29,41 @@ except ImportError:
     # Aturem el programa perquè no té sentit continuar sense les dades de recerca
     st.stop() 
 # ──────────────────────────────────────────────────────────
+# 1. Carrega les variables de l'arxiu .env en entorn local
 load_dotenv()
 
-# Intenta llegir la clau dels Secrets de Streamlit o del sistema local (.env)
-api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-
-# Si no troba cap clau, mostra un avís clar abans de fallar
-if not api_key:
-    st.error("❌ No s'ha trobat la clau GEMINI_API_KEY als Secrets de Streamlit o al fitxer .env")
-    st.stop()
-
-# Inicialitzar el client amb la clau neta
-client = genai.Client(api_key=str(api_key).strip())
-
-# 3. Executar la crida amb un model vàlid
+# 2. Obté la clau de manera segura (Secrets a Streamlit Cloud o .env en local)
+api_key = None
 try:
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents="Hola!"
-    )
-    st.success("Connexió correcta amb Gemini!")
-    st.write(response.text)
+  if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
+except Exception:
+  pass  # Si no existeix secrets.toml en local, no llença error
+
+if not api_key:
+  api_key = os.getenv("GEMINI_API_KEY")
+
+# 3. Validació de seguretat
+if not api_key:
+  st.error(
+      "❌ No s'ha trobat la clau GEMINI_API_KEY als Secrets de Streamlit ni al"
+      " fitxer .env"
+  )
+  st.stop()
+
+# 4. Inicialització i generació
+try:
+  client = genai.Client(api_key=str(api_key).strip())
+
+  response = client.models.generate_content(
+      model="gemini-2.0-flash", contents="Hola!"
+  )
+
+  st.success("Connexió correcta amb Gemini!")
+  st.write(response.text)
+
 except Exception as e:
-    st.error(f"Error durant la generació: {e}")
-    
+  st.error(f"Error durant la generació: {e}")    
 FITXER_SESSIONS = "sessions_castella.json"
 
 # ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
