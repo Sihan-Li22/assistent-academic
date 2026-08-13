@@ -96,7 +96,8 @@ def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
           f"⚠️ Intent {intent + 1} de {reintents} fallit amb el model. "
           f"Reintentant en {espera} segons... Error: {e}"
       )
-      time.sleep(espera)FITXER_SESSIONS = "sessions_castella.json"
+      time.sleep(espera)
+FITXER_SESSIONS = "sessions_castella.json"
 
 # ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
 PROMPT_BASE_SISTEMA = f"""Ets l'Assistent Intel·ligent i Tutor Expert en Lengua Castellana y Literatura per a les proves PAU de Catalunya.

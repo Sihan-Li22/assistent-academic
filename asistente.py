@@ -169,18 +169,20 @@ def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
       )
       return response  # Retorna la resposta si ha tingut èxit
 
-    except Exception as e:
-      # Si és l'últim intent i continua fallant, llancem l'error
+except Exception as e:
       if intent == reintents - 1:
         raise e
 
-      # Si no és l'últim intent, esperem uns segons abans de tornar-ho a provar
       print(
           f"⚠️ Intent {intent + 1} de {reintents} fallit amb el model. "
           f"Reintentant en {espera} segons... Error: {e}"
       )
       time.sleep(espera)
 
+
+# <-- AQUEST SALT DE LÍNIA ÉS IMPORTANT
+# Les variables globals s'han d'alinear a l'esquerra del tot (sense espais davant)
+FITXER_SESSIONS = "sessions_castella.json"
 # ── Inici ─────────────────────────────────────────────────────────────────────
 historial = carregar_historial()
 
