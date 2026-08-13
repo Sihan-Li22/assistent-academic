@@ -55,15 +55,33 @@ if not api_key:
 try:
   client = genai.Client(api_key=str(api_key).strip())
 
+# 🔍 Buscar automàticament quin model actiu tens disponible
+  available_models = [
+      m.name
+      for m in client.models.list()
+      if "generateContent" in m.supported_actions
+  ]
+
+  if not available_models:
+    st.error("❌ La teva API Key no té cap model de generació actiu assignat.")
+    st.stop()
+
+  # Agafem automàticament el primer model actiu disponible (ex: 'gemini-2.5-flash')
+  selected_model = available_models[0]
+
+  # Executem la generació
   response = client.models.generate_content(
-      model="gemini-2.5-flash", contents="Hola!"
+      model=selected_model, contents="Hola!"
   )
 
-  st.success("Connexió correcta amb Gemini!")
+  st.success(
+      f" Connexió correcta amb Gemini! (Model utilitzat: {selected_model})"
+  )
   st.write(response.text)
 
 except Exception as e:
-  st.error(f"Error durant la generació: {e}")    
+  st.error(f"Error durant la generació: {e}")
+  
 FITXER_SESSIONS = "sessions_castella.json"
 
 # ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
