@@ -112,26 +112,49 @@ def exportar_conversa(historial):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+def obtenir_model_actiu():
+  """Funció d'ajuda per trobar automàticament un model vàlid i evitar errors 404."""
+  try:
+    models = [
+        m.name
+        for m in client.models.list()
+        if "generateContent" in m.supported_actions
+    ]
+    if models:
+      # Prioritzem models tipus 'flash', si no agafem el primer de la llista
+      flash_models = [m for m in models if "flash" in m]
+      return flash_models[0] if flash_models else models[0]
+  except Exception:
+    pass
+  # Si per algun motiu falla la llista, utilitzem un nom estàndard
+  return "gemini-2.5-flash"
+
+
 def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
-    for intent in range(reintents):
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=historial,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT
-                )
-            )
-            return response
-        except Exception as e:
-            if "503" in str(e) or "UNAVAILABLE" in str(e):
-                if intent < reintents - 1:
-                    print(f"Servidor ocupat, reintentant en {espera}s... ({intent+1}/{reintents})")
-                    time.sleep(espera)
-                else:
-                    raise
-            else:
-                raise
+  # 1. Obté automàticament un model actiu disponible
+  model_actiu = obtenir_model_actiu()
+
+  # 2. Bucle de reintents
+  for intent in range(reintents):
+    try:
+      response = client.models.generate_content(
+          model=model_actiu,
+          contents=historial,
+          config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+      )
+      return response  # Retorna la resposta si ha tingut èxit
+
+    except Exception as e:
+      # Si és l'últim intent i continua fallant, llancem l'error
+      if intent == reintents - 1:
+        raise e
+
+      # Si no és l'últim intent, esperem uns segons abans de tornar-ho a provar
+      print(
+          f"⚠️ Intent {intent + 1} de {reintents} fallit: {e}. Reintentant en"
+          f" {espera} segons..."
+      )
+      time.sleep(espera)
 
 
 # ── Inici ─────────────────────────────────────────────────────────────────────
