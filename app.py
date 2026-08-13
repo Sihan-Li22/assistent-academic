@@ -9,6 +9,19 @@ from google import genai
 from google.genai import types
 import streamlit as st
 
+# 1. Carrega les variables d'entorn (fitxer .env)
+load_dotenv()
+
+# 2. Inicialitza el client de Gemini amb la teva API Key
+api_key = os.getenv("GEMINI_API_KEY")
+
+if not api_key:
+  raise ValueError(
+      "❌ No s'ha trobat la clau GEMINI_API_KEY. Assegura't que està configurada al fitxer .env"
+  )
+
+client = genai.Client(api_key=api_key)
+
 # Intentem carregar WeasyPrint per a la generació de PDF
 try:
     from weasyprint import HTML
