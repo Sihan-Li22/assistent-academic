@@ -29,60 +29,74 @@ except ImportError:
     # Aturem el programa perquè no té sentit continuar sense les dades de recerca
     st.stop() 
 # ──────────────────────────────────────────────────────────
-# 1. Carrega les variables de l'arxiu .env en entorn local
-load_dotenv()
-
-# 2. Obté la clau de manera segura (Secrets a Streamlit Cloud o .env en local)
-api_key = None
-try:
-  if "GEMINI_API_KEY" in st.secrets:
-    api_key = st.secrets["GEMINI_API_KEY"]
-except Exception:
-  pass  # Si no existeix secrets.toml en local, no llença error
-
-if not api_key:
-  api_key = os.getenv("GEMINI_API_KEY")
-
-# 3. Validació de seguretat
-if not api_key:
-  st.error(
-      "❌ No s'ha trobat la clau GEMINI_API_KEY als Secrets de Streamlit ni al"
-      " fitxer .env"
-  )
-  st.stop()
-
-# 4. Inicialització i generació
-try:
-  client = genai.Client(api_key=str(api_key).strip())
-
-# 🔍 Buscar automàticament quin model actiu tens disponible
-  available_models = [
-      m.name
-      for m in client.models.list()
-      if "generateContent" in m.supported_actions
+def obtenir_model_actiu():
+  """Funció d'ajuda per trobar automàticament un model vàlid i evitar errors 404."""
+  # 1. Llista de models moderns recomanats per provar directament
+  models_preferits = [
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
   ]
 
-  if not available_models:
-    st.error("❌ La teva API Key no té cap model de generació actiu assignat.")
-    st.stop()
+  try:
+    # Intentem obtenir la llista de models disponibles des de l'API
+    models_disponibles = list(client.models.list())
+    noms_valids = []
 
-  # Agafem automàticament el primer model actiu disponible (ex: 'gemini-2.5-flash')
-  selected_model = available_models[0]
+    for m in models_disponibles:
+      # Comprovem si suporta generateContent
+      if hasattr(m, "supported_actions") and "generateContent" in m.supported_actions:
+        # Netegem el prefix 'models/' si existeix
+        nom_net = m.name.replace("models/", "")
+        noms_valids.append(nom_net)
 
-  # Executem la generació
-  response = client.models.generate_content(
-      model=selected_model, contents="Hola!"
-  )
+    if noms_valids:
+      # Busquem si algun dels nostres preferits està disponible
+      for preferit in models_preferits:
+        if preferit in noms_valids:
+          return preferit
 
-  st.success(
-      f" Connexió correcta amb Gemini! (Model utilitzat: {selected_model})"
-  )
-  st.write(response.text)
+      # Si cap preferit coincideix, prioritzem un que contingui 'flash'
+      flash_models = [m for m in noms_valids if "flash" in m]
+      if flash_models:
+        return flash_models[0]
 
-except Exception as e:
-  st.error(f"Error durant la generació: {e}")
-  
-FITXER_SESSIONS = "sessions_castella.json"
+      # Si no, agafem el primer de la llista vàlida
+      return noms_valids[0]
+
+  except Exception as e:
+    print(f"⚠️ Avís en llistar els models automàticament: {e}")
+
+  # 2. Si falla tot l'anterior, retornem directament un model estàndard segur
+  return "gemini-2.5-flash"
+
+
+def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
+  # Bucle de reintents
+  for intent in range(reintents):
+    try:
+      # Obtenim un model actiu actualitzat a cada intent per si de cas
+      model_actiu = obtenir_model_actiu()
+
+      response = client.models.generate_content(
+          model=model_actiu,
+          contents=historial,
+          config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+      )
+      return response  # Retorna la resposta si ha tingut èxit
+
+    except Exception as e:
+      # Si és l'últim intent i continua fallant, llancem l'error
+      if intent == reintents - 1:
+        raise e
+
+      # Si no és l'últim intent, esperem uns segons abans de tornar-ho a provar
+      print(
+          f"⚠️ Intent {intent + 1} de {reintents} fallit amb el model. "
+          f"Reintentant en {espera} segons... Error: {e}"
+      )
+      time.sleep(espera)FITXER_SESSIONS = "sessions_castella.json"
 
 # ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
 PROMPT_BASE_SISTEMA = f"""Ets l'Assistent Intel·ligent i Tutor Expert en Lengua Castellana y Literatura per a les proves PAU de Catalunya.

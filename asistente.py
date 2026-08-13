@@ -114,29 +114,54 @@ def exportar_conversa(historial):
 
 def obtenir_model_actiu():
   """Funció d'ajuda per trobar automàticament un model vàlid i evitar errors 404."""
+  # 1. Llista de models moderns recomanats per provar directament
+  models_preferits = [
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
+  ]
+
   try:
-    models = [
-        m.name
-        for m in client.models.list()
-        if "generateContent" in m.supported_actions
-    ]
-    if models:
-      # Prioritzem models tipus 'flash', si no agafem el primer de la llista
-      flash_models = [m for m in models if "flash" in m]
-      return flash_models[0] if flash_models else models[0]
-  except Exception:
-    pass
-  # Si per algun motiu falla la llista, utilitzem un nom estàndard
+    # Intentem obtenir la llista de models disponibles des de l'API
+    models_disponibles = list(client.models.list())
+    noms_valids = []
+
+    for m in models_disponibles:
+      # Comprovem si suporta generateContent
+      if hasattr(m, "supported_actions") and "generateContent" in m.supported_actions:
+        # Netegem el prefix 'models/' si existeix
+        nom_net = m.name.replace("models/", "")
+        noms_valids.append(nom_net)
+
+    if noms_valids:
+      # Busquem si algun dels nostres preferits està disponible
+      for preferit in models_preferits:
+        if preferit in noms_valids:
+          return preferit
+
+      # Si cap preferit coincideix, prioritzem un que contingui 'flash'
+      flash_models = [m for m in noms_valids if "flash" in m]
+      if flash_models:
+        return flash_models[0]
+
+      # Si no, agafem el primer de la llista vàlida
+      return noms_valids[0]
+
+  except Exception as e:
+    print(f"⚠️ Avís en llistar els models automàticament: {e}")
+
+  # 2. Si falla tot l'anterior, retornem directament un model estàndard segur
   return "gemini-2.5-flash"
 
 
 def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
-  # 1. Obté automàticament un model actiu disponible
-  model_actiu = obtenir_model_actiu()
-
-  # 2. Bucle de reintents
+  # Bucle de reintents
   for intent in range(reintents):
     try:
+      # Obtenim un model actiu actualitzat a cada intent per si de cas
+      model_actiu = obtenir_model_actiu()
+
       response = client.models.generate_content(
           model=model_actiu,
           contents=historial,
@@ -151,11 +176,10 @@ def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
 
       # Si no és l'últim intent, esperem uns segons abans de tornar-ho a provar
       print(
-          f"⚠️ Intent {intent + 1} de {reintents} fallit: {e}. Reintentant en"
-          f" {espera} segons..."
+          f"⚠️ Intent {intent + 1} de {reintents} fallit amb el model. "
+          f"Reintentant en {espera} segons... Error: {e}"
       )
       time.sleep(espera)
-
 
 # ── Inici ─────────────────────────────────────────────────────────────────────
 historial = carregar_historial()
