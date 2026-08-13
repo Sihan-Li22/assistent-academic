@@ -56,7 +56,7 @@ try:
   client = genai.Client(api_key=str(api_key).strip())
 
   response = client.models.generate_content(
-      model="gemini-1.5-flash", contents="Hola!"
+      model="gemini-2.5-flash", contents="Hola!"
   )
 
   st.success("Connexió correcta amb Gemini!")
