@@ -6,12 +6,6 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-import os
-import time
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-
 # 1. Carrega les variables d'entorn (fitxer .env)
 load_dotenv()
 
@@ -133,12 +127,12 @@ def exportar_conversa(historial):
 
 def obtenir_model_actiu():
   """Funció d'ajuda per trobar automàticament un model vàlid i evitar errors 404."""
-  # 1. Llista de models moderns recomanats per provar directament
+  # 1. Models vàlids actuals (s'ha eliminat la versió antiga gemini-2.5-flash)
   models_preferits = [
-      "gemini-2.5-flash",
-      "gemini-2.5-pro",
       "gemini-1.5-flash",
       "gemini-1.5-pro",
+      "gemini-2.0-flash",
+      "gemini-2.5-flash",
   ]
 
   try:
@@ -147,9 +141,11 @@ def obtenir_model_actiu():
     noms_valids = []
 
     for m in models_disponibles:
-      # Comprovem si suporta generateContent
-      if hasattr(m, "supported_actions") and "generateContent" in m.supported_actions:
-        # Netegem el prefix 'models/' si existeix
+      # Comprovem si suporta la generació de contingut
+      supported = getattr(m, "supported_actions", []) or getattr(
+          m, "supported_generation_methods", []
+      )
+      if "generateContent" in supported or "generate_content" in supported:
         nom_net = m.name.replace("models/", "")
         noms_valids.append(nom_net)
 
@@ -164,14 +160,13 @@ def obtenir_model_actiu():
       if flash_models:
         return flash_models[0]
 
-      # Si no, agafem el primer de la llista vàlida
       return noms_valids[0]
 
   except Exception as e:
     print(f"⚠️ Avís en llistar els models automàticament: {e}")
 
-  # 2. Si falla tot l'anterior, retornem directament un model estàndard segur
-  return "gemini-2.5-flash"
+  # 2. Model de reserva segur (gemini-1.5-flash sempre està disponible)
+  return "gemini-1.5-flash"
 
 
 def generar_resposta_amb_reintents(historial, reintents=3, espera=5):

@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 import streamlit as st
+from asistente import generar_resposta_amb_reintents, obtenir_model_actiu
 
 # 1. Carrega les variables d'entorn (fitxer .env)
 load_dotenv()
@@ -85,31 +86,6 @@ def obtenir_model_actiu():
   return "gemini-2.5-flash"
 
 
-def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
-  # Bucle de reintents
-  for intent in range(reintents):
-    try:
-      # Obtenim un model actiu actualitzat a cada intent per si de cas
-      model_actiu = obtenir_model_actiu()
-
-      response = client.models.generate_content(
-          model=model_actiu,
-          contents=historial,
-          config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-      )
-      return response  # Retorna la resposta si ha tingut èxit
-
-    except Exception as e:
-      # Si és l'últim intent i continua fallant, llancem l'error
-      if intent == reintents - 1:
-        raise e
-
-      # Si no és l'últim intent, esperem uns segons abans de tornar-ho a provar
-      print(
-          f"⚠️ Intent {intent + 1} de {reintents} fallit amb el model. "
-          f"Reintentant en {espera} segons... Error: {e}"
-      )
-      time.sleep(espera)
 FITXER_SESSIONS = "sessions_castella.json"
 
 # ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
