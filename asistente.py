@@ -62,8 +62,10 @@ def obtenir_model_actiu(client=None):
 
 
 def generar_resposta_amb_reintents(client, historial, system_prompt=SYSTEM_PROMPT, reintents=3, espera=3):
-    """Funció unificada per enviar peticions a Gemini sense bloquejos."""
-    model_actiu = obtenir_model_actiu(client)
+    """Funció unificada per enviar peticions a Gemini."""
+    # Usem el nom oficial del model actual
+    model_actiu = "gemini-2.5-flash"
+
     for intent in range(reintents):
         try:
             response = client.models.generate_content(
