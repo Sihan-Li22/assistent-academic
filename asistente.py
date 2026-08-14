@@ -162,7 +162,7 @@ def obtenir_model_actiu():
 def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
     for intent in range(reintents):
         try:
-            model_actiu = obtenir_model_actiu()
+            model_actiu = "gemini-1.5-flash"
 
             response = client.models.generate_content(
                 model=model_actiu,
