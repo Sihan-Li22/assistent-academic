@@ -6,18 +6,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-# 1. Carrega les variables d'entorn (fitxer .env)
 load_dotenv()
-
-# 2. Inicialitza el client de Gemini amb la teva API Key
-api_key = os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    raise ValueError(
-        "❌ No s'ha trobat la clau GEMINI_API_KEY. Assegura't que està configurada al fitxer .env"
-    )
-
-client = genai.Client(api_key=api_key)
 
 FITXER_MEMORIA = "memoria.json"
 
@@ -38,7 +27,7 @@ QUAN EXPLIQUES UN CONCEPTE:
 - Dona un exemple concret i proper a la realitat de l'estudiant
 - Al final, pregunta si ho ha entès o si vol que ho expliquis d'una altra manera
 
-QUAN L me'ESTUDIANT TÉ UN EXERCICI O PROBLEMA:
+QUAN L'ESTUDIANT TÉ UN EXERCICI O PROBLEMA:
 - No donis la resposta directament
 - Guia'l pas a pas amb preguntes
 - Si s'encalla, dona una pista, no la solució
@@ -52,13 +41,18 @@ LIMITACIONS HONESTES:
 - Si el tema és molt específic o avançat, recomana consultar el professor o una font fiable"""
 
 
-# ── Funcions de memòria ───────────────────────────────────────────────────────
+def inicialitzar_client():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("❌ GEMINI_API_KEY no trobada a les variables d'entorn.")
+    return genai.Client(api_key=api_key)
 
-def carregar_historial():
-    if not os.path.exists(FITXER_MEMORIA):
+
+def carregar_historial(fitxer=FITXER_MEMORIA):
+    if not os.path.exists(fitxer):
         return []
     try:
-        with open(FITXER_MEMORIA, "r", encoding="utf-8") as f:
+        with open(fitxer, "r", encoding="utf-8") as f:
             dades = json.load(f)
         historial = []
         for missatge in dades:
@@ -70,26 +64,24 @@ def carregar_historial():
             )
         return historial
     except Exception:
-        print("⚠ No s'ha pogut carregar la memòria. Comencem de zero.\n")
         return []
 
 
-def guardar_historial(historial):
+def guardar_historial(historial, fitxer=FITXER_MEMORIA):
     try:
         dades = [
             {"role": missatge.role, "text": missatge.parts[0].text}
             for missatge in historial
         ]
-        with open(FITXER_MEMORIA, "w", encoding="utf-8") as f:
+        with open(fitxer, "w", encoding="utf-8") as f:
             json.dump(dades, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"⚠ No s'ha pogut guardar la memòria: {e}")
+        print(f"⚠ Error en guardar memòria: {e}")
 
 
-def netejar_historial():
-    if os.path.exists(FITXER_MEMORIA):
-        os.remove(FITXER_MEMORIA)
-    print("🗑 Memòria esborrada. Comencem de zero.\n")
+def netejar_historial(fitxer=FITXER_MEMORIA):
+    if os.path.exists(fitxer):
+        os.remove(fitxer)
     return []
 
 
@@ -119,85 +111,21 @@ def exportar_conversa(historial):
     return nom_fitxer
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-
 def obtenir_model_actiu():
-    """Retorna directament el model per defecte per evitar bloquejos en l'inici."""
     return "gemini-1.5-flash"
 
 
-def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
+def generar_resposta_amb_reintents(client, historial, reintents=3, espera=5):
     for intent in range(reintents):
         try:
             model_actiu = obtenir_model_actiu()
-
             response = client.models.generate_content(
                 model=model_actiu,
                 contents=historial,
                 config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
             )
             return response
-
         except Exception as e:
             if intent == reintents - 1:
                 raise e
-
-            print(
-                f"⚠️ Intent {intent + 1} de {reintents} fallit amb el model. "
-                f"Reintentant en {espera} segons... Error: {e}"
-            )
             time.sleep(espera)
-
-FITXER_SESSIONS = "sessions_castella.json"
-
-# ── Inici ─────────────────────────────────────────────────────────────────────
-historial = carregar_historial()
-
-if historial:
-    print(f"📚 Memòria carregada: {len(historial) // 2} interaccions anteriors.\n")
-else:
-    print("✨ Nova sessió iniciada.\n")
-
-print("Assistent acadèmic iniciat. Comandes disponibles: 'sortir', 'netejar', 'exportar'.\n")
-
-while True:
-    pregunta = input("Tu: ")
-
-    if pregunta.lower() == "sortir":
-        print("Fins aviat!")
-        break
-
-    if pregunta.lower() == "netejar":
-        historial = netejar_historial()
-        continue
-
-    if pregunta.lower() == "exportar":
-        fitxer = exportar_conversa(historial)
-        if fitxer:
-            print(f"✅ Conversa exportada: {fitxer}\n")
-        else:
-            print("⚠ No hi ha cap conversa per exportar.\n")
-        continue
-
-    if not pregunta.strip():
-        continue
-
-    historial.append(
-        types.Content(role="user", parts=[types.Part.from_text(text=pregunta)])
-    )
-
-    try:
-        response = generar_resposta_amb_reintents(historial)
-        resposta = response.text
-
-        historial.append(
-            types.Content(role="model", parts=[types.Part.from_text(text=resposta)])
-        )
-
-        guardar_historial(historial)
-
-        print(f"\nAssistent: {resposta}\n")
-
-    except Exception as e:
-        historial.pop()
-        print(f"\nError: {e}\n")
