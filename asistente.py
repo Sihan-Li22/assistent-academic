@@ -1,5 +1,5 @@
-import os
 import json
+import os
 import time
 from datetime import datetime
 from dotenv import load_dotenv
@@ -13,15 +13,11 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-  raise ValueError(
-      "❌ No s'ha trobat la clau GEMINI_API_KEY. Assegura't que està configurada al fitxer .env"
-  )
+    raise ValueError(
+        "❌ No s'ha trobat la clau GEMINI_API_KEY. Assegura't que està configurada al fitxer .env"
+    )
 
 client = genai.Client(api_key=api_key)
-
-load_dotenv()
-
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 FITXER_MEMORIA = "memoria.json"
 
@@ -42,7 +38,7 @@ QUAN EXPLIQUES UN CONCEPTE:
 - Dona un exemple concret i proper a la realitat de l'estudiant
 - Al final, pregunta si ho ha entès o si vol que ho expliquis d'una altra manera
 
-QUAN L'ESTUDIANT TÉ UN EXERCICI O PROBLEMA:
+QUAN L me'ESTUDIANT TÉ UN EXERCICI O PROBLEMA:
 - No donis la resposta directament
 - Guia'l pas a pas amb preguntes
 - Si s'encalla, dona una pista, no la solució
@@ -69,7 +65,7 @@ def carregar_historial():
             historial.append(
                 types.Content(
                     role=missatge["role"],
-                    parts=[types.Part(text=missatge["text"])]
+                    parts=[types.Part.from_text(text=missatge["text"])]
                 )
             )
         return historial
@@ -126,77 +122,68 @@ def exportar_conversa(historial):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def obtenir_model_actiu():
-  """Funció d'ajuda per trobar automàticament un model vàlid i evitar errors 404."""
-  # 1. Models vàlids actuals (s'ha eliminat la versió antiga gemini-2.5-flash)
-  models_preferits = [
-      "gemini-1.5-flash",
-      "gemini-1.5-pro",
-      "gemini-2.0-flash",
-      "gemini-2.5-flash",
-  ]
+    """Funció d'ajuda per trobar automàticament un model vàlid i evitar errors 404."""
+    models_preferits = [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+    ]
 
-  try:
-    # Intentem obtenir la llista de models disponibles des de l'API
-    models_disponibles = list(client.models.list())
-    noms_valids = []
+    try:
+        models_disponibles = list(client.models.list())
+        noms_valids = []
 
-    for m in models_disponibles:
-      # Comprovem si suporta la generació de contingut
-      supported = getattr(m, "supported_actions", []) or getattr(
-          m, "supported_generation_methods", []
-      )
-      if "generateContent" in supported or "generate_content" in supported:
-        nom_net = m.name.replace("models/", "")
-        noms_valids.append(nom_net)
+        for m in models_disponibles:
+            supported = getattr(m, "supported_actions", []) or getattr(
+                m, "supported_generation_methods", []
+            )
+            if "generateContent" in supported or "generate_content" in supported:
+                nom_net = m.name.replace("models/", "")
+                noms_valids.append(nom_net)
 
-    if noms_valids:
-      # Busquem si algun dels nostres preferits està disponible
-      for preferit in models_preferits:
-        if preferit in noms_valids:
-          return preferit
+        if noms_valids:
+            for preferit in models_preferits:
+                if preferit in noms_valids:
+                    return preferit
 
-      # Si cap preferit coincideix, prioritzem un que contingui 'flash'
-      flash_models = [m for m in noms_valids if "flash" in m]
-      if flash_models:
-        return flash_models[0]
+            flash_models = [m for m in noms_valids if "flash" in m]
+            if flash_models:
+                return flash_models[0]
 
-      return noms_valids[0]
+            return noms_valids[0]
 
-  except Exception as e:
-    print(f"⚠️ Avís en llistar els models automàticament: {e}")
+    except Exception as e:
+        print(f"⚠️ Avís en llistar els models automàticament: {e}")
 
-  # 2. Model de reserva segur (gemini-1.5-flash sempre està disponible)
-  return "gemini-1.5-flash"
+    return "gemini-1.5-flash"
 
 
 def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
-  # Bucle de reintents
-  for intent in range(reintents):
-    try:
-      # Obtenim un model actiu actualitzat a cada intent per si de cas
-      model_actiu = obtenir_model_actiu()
+    for intent in range(reintents):
+        try:
+            model_actiu = obtenir_model_actiu()
 
-      response = client.models.generate_content(
-          model=model_actiu,
-          contents=historial,
-          config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-      )
-      return response  # Retorna la resposta si ha tingut èxit
+            response = client.models.generate_content(
+                model=model_actiu,
+                contents=historial,
+                config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+            )
+            return response
 
-except Exception as e:
-      if intent == reintents - 1:
-        raise e
+        except Exception as e:
+            if intent == reintents - 1:
+                raise e
 
-      print(
-          f"⚠️ Intent {intent + 1} de {reintents} fallit amb el model. "
-          f"Reintentant en {espera} segons... Error: {e}"
-      )
-      time.sleep(espera)
+            print(
+                f"⚠️ Intent {intent + 1} de {reintents} fallit amb el model. "
+                f"Reintentant en {espera} segons... Error: {e}"
+            )
+            time.sleep(espera)
 
 
-# <-- AQUEST SALT DE LÍNIA ÉS IMPORTANT
-# Les variables globals s'han d'alinear a l'esquerra del tot (sense espais davant)
 FITXER_SESSIONS = "sessions_castella.json"
+
 # ── Inici ─────────────────────────────────────────────────────────────────────
 historial = carregar_historial()
 
@@ -230,7 +217,7 @@ while True:
         continue
 
     historial.append(
-        types.Content(role="user", parts=[types.Part(text=pregunta)])
+        types.Content(role="user", parts=[types.Part.from_text(text=pregunta)])
     )
 
     try:
@@ -238,7 +225,7 @@ while True:
         resposta = response.text
 
         historial.append(
-            types.Content(role="model", parts=[types.Part(text=resposta)])
+            types.Content(role="model", parts=[types.Part.from_text(text=resposta)])
         )
 
         guardar_historial(historial)
