@@ -8,92 +8,44 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 import streamlit as st
-from asistente import generar_resposta_amb_reintents, obtenir_model_actiu
 
-# 1. Carrega les variables d'entorn (fitxer .env)
+# Importamos las funciones limpias desde asistente.py
+from asistente import inicialitzar_client, generar_resposta_amb_reintents, obtenir_model_actiu
+
+# 1. Carga de variables de entorno
 load_dotenv()
 
-# 2. Inicialitza el client de Gemini amb la teva API Key
+# 2. Inicialización segura del cliente Gemini
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-  raise ValueError(
-      "❌ No s'ha trobat la clau GEMINI_API_KEY. Assegura't que està configurada al fitxer .env"
-  )
+    st.error("❌ No s'ha trobat la clau GEMINI_API_KEY. Configura-la a les variables d'entorn o al fitxer .env")
+    st.stop()
 
 client = genai.Client(api_key=api_key)
 
-# Intentem carregar WeasyPrint per a la generació de PDF
+# Verification opcional de WeasyPrint para PDF
 try:
     from weasyprint import HTML
     WEASYPRINT_DISPONIBLE = True
 except Exception:
     WEASYPRINT_DISPONIBLE = False
 
-# ─── SOLUCIÓ TÈCNICA APLICADA (Verificació Local TDR) ───
-# Intentem carregar el banc de coneixement de Castellà real ('contingut_pau.py')
+# ── Càrrega de la base de coneixement (Fallback segur per a la núvol) ──
 try:
-    # Suposem que el teu fitxer amb els 0,1 punts es diu 'contingut_pau.py'
-    import contingut_pau 
-    # Amb això el sistema s'assegura que ha carregat el fitxer real
-    print("✅ Base de dades de la PAU carregada correctament des de 'contingut_pau.py' a 'app.py'.")
+    import contingut_pau
+    CRITERIS_PAU = getattr(contingut_pau, 'CRITERIS_AVALUACIO', 'Descompte per faltes d\'ortografia, claredat sintàctica i precisió terminològica.')
+    print("✅ Base de dades de la PAU carregada des de 'contingut_pau.py'")
 except ImportError:
-    # Si el fitxer no existeix, aturem l'aplicació per avisar del problema
-    st.error("❌ CRÍTIC: No s'ha trobat el fitxer 'contingut_pau.py' a la mateixa carpeta. L'assistent no tindrà els criteris oficials i les correccions seran genèriques. Si us plau, comprova el nom de l'arxiu i la seva ubicació.")
-    # Aturem el programa perquè no té sentit continuar sense les dades de recerca
-    st.stop() 
-# ──────────────────────────────────────────────────────────
-def obtenir_model_actiu():
-  """Funció d'ajuda per trobar automàticament un model vàlid i evitar errors 404."""
-  # 1. Llista de models moderns recomanats per provar directament
-  models_preferits = [
-      "gemini-2.5-flash",
-      "gemini-2.5-pro",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro",
-  ]
+    CRITERIS_PAU = "Criteris generals PAU: Penalització per faltes d'ortografia, claredat sintàctica, cohesió i precisió terminològica segons el GTG de la RAE."
+    st.warning("⚠️ 'contingut_pau.py' no trobat. S'utilitzaran els criteris generals per defecte.")
 
-  try:
-    # Intentem obtenir la llista de models disponibles des de l'API
-    models_disponibles = list(client.models.list())
-    noms_valids = []
-
-    for m in models_disponibles:
-      # Comprovem si suporta generateContent
-      if hasattr(m, "supported_actions") and "generateContent" in m.supported_actions:
-        # Netegem el prefix 'models/' si existeix
-        nom_net = m.name.replace("models/", "")
-        noms_valids.append(nom_net)
-
-    if noms_valids:
-      # Busquem si algun dels nostres preferits està disponible
-      for preferit in models_preferits:
-        if preferit in noms_valids:
-          return preferit
-
-      # Si cap preferit coincideix, prioritzem un que contingui 'flash'
-      flash_models = [m for m in noms_valids if "flash" in m]
-      if flash_models:
-        return flash_models[0]
-
-      # Si no, agafem el primer de la llista vàlida
-      return noms_valids[0]
-
-  except Exception as e:
-    print(f"⚠️ Avís en llistar els models automàticament: {e}")
-
-  # 2. Si falla tot l'anterior, retornem directament un model estàndard segur
-  return "gemini-2.5-flash"
-
-
-FITXER_SESSIONS = "sessions_castella.json"
-
-# ── PROMPT DEL SISTEMA: TUTOR I CLONADOR PAU LENGUA CASTELLANA ──────────────────
+# ── PROMPT DEL SISTEMA ────────────────────────────────────────────────────────
 PROMPT_BASE_SISTEMA = f"""Ets l'Assistent Intel·ligent i Tutor Expert en Lengua Castellana y Literatura per a les proves PAU de Catalunya.
 El teu objectiu principal és entrenar l'alumne utilitzant exactament el mateix rigor, vocabulari tècnic gramatical i estructura oficial de la Generalitat de Catalunya.
 
 REFERÈNCIES I CRITERIS REALS DE CORRECCIÓ:
-{getattr(contingut_pau, 'CRITERIS_AVALUACIO', 'Descompte per faltes d\'ortografia, claredat sintàctica i precisió terminològica.')}
+{CRITERIS_PAU}
 
 MÈTOD PEDAGÒGIC:
 - Quan corregis la redacció o la sintaxi d'un alumne, no li donis només la resposta correcta. Explica el *perquè* gramatical o la norma de la RAE/PAU aplicada.
@@ -110,30 +62,13 @@ L'HTML ha de seguir rígidament aquests requisits estètics oficials:
    - "Sèrie 1 / Curs 2026" a la dreta.
 3. Bloc de qualificacions per al tribunal.
 4. L'examen ha de constar de les 3 seccions oficials:
-   - Opció A / Opció B (o estructura única actual):
-   - **Bloque 1: Comprensión lectora y expresión escrita** (amb un text breu d'un autor reconegut o article de premsa).
-   - **Bloque 2: Reflexión lingüística** (Parells mínims, anàlisi sintàctica, funcions del llenguatge, valor de les formes verbals).
-   - **Bloque 3: Educación literaria** (Preguntes sobre les lectures obligatòries).
+   - Bloque 1: Comprensión lectora y expresión escrita.
+   - Bloque 2: Reflexión lingüística.
+   - Bloque 3: Educación literaria.
 5. Puntuacions indicades clarament en cada apartat (ex: "[1 punto]", "[0,5 puntos]").
 """
 
-# ── FUNCIONS DE PERSISTÈNCIA DE SESSIONS ─────────────────────────────────────
-def carregar_sessions():
-    if not os.path.exists(FITXER_SESSIONS):
-        return {}
-    try:
-        with open(FITXER_SESSIONS, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def guardar_sessions(sessions):
-    try:
-        with open(FITXER_SESSIONS, "w", encoding="utf-8") as f:
-            json.dump(sessions, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.warning(f"Error en desar el fitxer de dades: {e}")
-
+# ── GESTIÓ DE SESSIONS EN MEMÒRIA (Aïllament per usuari en la web) ────────────
 def nova_sessio():
     return {
         "id": str(uuid.uuid4()),
@@ -151,26 +86,25 @@ def generar_titol(primer_missatge: str) -> str:
     titol = primer_missatge.strip().replace("\n", " ")
     return titol[:30] + "…" if len(titol) > 30 else titol
 
-def generar_resposta(historial, system_prompt, max_reintents=3, espera_segons=3):
+def generar_resposta_app(historial_raw, system_prompt):
+    # Convertim l'historial intern al format de l'SDK de Gemini
     contingut = [
-        types.Content(role=m["role"], parts=[types.Part(text=m["text"])])
-        for m in historial
+        types.Content(
+            role=m["role"],
+            parts=[types.Part.from_text(text=m["text"])]
+        )
+        for m in historial_raw
     ]
-    for intent in range(max_reintents):
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=contingut,
-                config=types.GenerateContentConfig(system_instruction=system_prompt)
-            )
-            return response.text
-        except Exception as e:
-            error_str = str(e)
-            if ("503" in error_str or "UNAVAILABLE" in error_str) and (intent < max_reintents - 1):
-                time.sleep(espera_segons * (intent + 1))
-                continue
-            else:
-                return f"❌ Error de connexió persistent amb Gemini: {e}."
+    model_actiu = obtenir_model_actiu()
+    try:
+        response = client.models.generate_content(
+            model=model_actiu,
+            contents=contingut,
+            config=types.GenerateContentConfig(system_instruction=system_prompt)
+        )
+        return response.text
+    except Exception as e:
+        return f"❌ Error de connexió amb Gemini ({model_actiu}): {e}"
 
 def extreure_html(text_ia: str) -> str:
     if "```html" in text_ia:
@@ -179,17 +113,13 @@ def extreure_html(text_ia: str) -> str:
         return html_pur.strip()
     return ""
 
-# ── CONFIGURACIÓ DE LA PÀGINA D'STREAMLIT ─────────────────────────────────────
+# ── CONFIGURACIÓ DE LA PÀGINA ─────────────────────────────────────────────────
 st.set_page_config(page_title="Tutor PAU Avançat - Lengua Castellana", page_icon="📚", layout="wide")
 
 if "sessions" not in st.session_state:
-    st.session_state.sessions = carregar_sessions()
-
-if "sessio_activa_id" not in st.session_state or st.session_state.sessio_activa_id not in st.session_state.sessions:
-    s = nova_sessio()
-    st.session_state.sessions[s["id"]] = s
-    st.session_state.sessio_activa_id = s["id"]
-    guardar_sessions(st.session_state.sessions)
+    s_inicial = nova_sessio()
+    st.session_state.sessions = {s_inicial["id"]: s_inicial}
+    st.session_state.sessio_activa_id = s_inicial["id"]
 
 def sessio_activa():
     return st.session_state.sessions[st.session_state.sessio_activa_id]
@@ -203,7 +133,6 @@ with st.sidebar:
         s = nova_sessio()
         st.session_state.sessions[s["id"]] = s
         st.session_state.sessio_activa_id = s["id"]
-        guardar_sessions(st.session_state.sessions)
         st.rerun()
 
     st.divider()
@@ -244,7 +173,6 @@ with st.sidebar:
         sessio_activa()["tema"] = tema_sel
         sessio_activa()["estrategia"] = estrategia_sel
         sessio_activa()["progres_simulat"] = min(sessio_activa().get("progres_simulat", 0) + 10, 100)
-        guardar_sessions(st.session_state.sessions)
         st.rerun()
 
     st.divider()
@@ -257,7 +185,7 @@ with st.sidebar:
                 st.session_state.sessio_activa_id = s["id"]
                 st.rerun()
 
-# ── CONSTRUCCIÓ ADAPTATIVA DEL PROMPT FINAL DE GEMINI ─────────────────────────
+# ── CONSTRUCCIÓ ADAPTATIVA DEL PROMPT FINAL ───────────────────────────────────
 prompt_final = PROMPT_BASE_SISTEMA
 if "Excel·lent" in exigencia_sel:
     prompt_final += "\n[EXIGÈNCIA MÀXIMA] Sigues inflexible amb la precisió de la terminologia gramatical (GTG - Glosario de Términos Gramaticales de la RAE)."
@@ -280,7 +208,6 @@ else:
 # ── INTERFÍCIE PRINCIPAL ──────────────────────────────────────────────────────
 st.title("📚 Preparador PAU Castellà — IA Acadèmica")
 
-# Barra de progrés de la sessió d'estudi
 prog_actual = sessio_activa().get("progres_simulat", 0)
 st.progress(prog_actual / 100, text=f"📊 Estat de la preparació en aquesta sessió: {prog_actual}%")
 
@@ -297,7 +224,6 @@ st.write("")
 tab_xat, tab_rendiment = st.tabs(["💬 Canal de Consulta i Pràctica", "📊 Anàlisi de Competències i Punts Febles"])
 
 with tab_xat:
-    # Generació de PDF si s'ha creat un examen HTML
     html_examen = sessio_activa().get("ultim_html_examen", "")
     if html_examen:
         st.success("✨ L'assistent ha generat un model d'examen clònic de Lengua Castellana PAU!")
@@ -327,7 +253,7 @@ with tab_xat:
             with st.chat_message(role):
                 st.markdown(msg["text"])
 
-    if missatge := st.chat_input("Escriu la teva dubte de sintaxi, ortografia, un comentari de text o demana un exercici..."):
+    if missatge := st.chat_input("Escriu el teu dubte de sintaxi, ortografia, un comentari de text o demana un exercici..."):
         with st.chat_message("user"):
             st.markdown(missatge)
 
@@ -339,7 +265,7 @@ with tab_xat:
 
         with st.chat_message("assistant"):
             with st.spinner("🤖 Analitzant la norma gramatical i redactant la resposta..."):
-                resposta = generar_resposta(sessio_activa()["historial"], prompt_final)
+                resposta = generar_resposta_app(sessio_activa()["historial"], prompt_final)
             st.markdown(resposta)
 
             html_detectat = extreure_html(resposta)
@@ -347,7 +273,6 @@ with tab_xat:
                 sessio_activa()["ultim_html_examen"] = html_detectat
 
         sessio_activa()["historial"].append({"role": "model", "text": resposta})
-        guardar_sessions(st.session_state.sessions)
         st.rerun()
 
 with tab_rendiment:
