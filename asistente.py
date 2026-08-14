@@ -122,47 +122,14 @@ def exportar_conversa(historial):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def obtenir_model_actiu():
-    """Funció d'ajuda per trobar automàticament un model vàlid i evitar errors 404."""
-    models_preferits = [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-2.0-flash",
-        "gemini-2.5-flash",
-    ]
-
-    try:
-        models_disponibles = list(client.models.list())
-        noms_valids = []
-
-        for m in models_disponibles:
-            supported = getattr(m, "supported_actions", []) or getattr(
-                m, "supported_generation_methods", []
-            )
-            if "generateContent" in supported or "generate_content" in supported:
-                nom_net = m.name.replace("models/", "")
-                noms_valids.append(nom_net)
-
-        if noms_valids:
-            for preferit in models_preferits:
-                if preferit in noms_valids:
-                    return preferit
-
-            flash_models = [m for m in noms_valids if "flash" in m]
-            if flash_models:
-                return flash_models[0]
-
-            return noms_valids[0]
-
-    except Exception as e:
-        print(f"⚠️ Avís en llistar els models automàticament: {e}")
-
+    """Retorna directament el model per defecte per evitar bloquejos en l'inici."""
     return "gemini-1.5-flash"
 
 
 def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
     for intent in range(reintents):
         try:
-            model_actiu = "gemini-1.5-flash"
+            model_actiu = obtenir_model_actiu()
 
             response = client.models.generate_content(
                 model=model_actiu,
@@ -180,7 +147,6 @@ def generar_resposta_amb_reintents(historial, reintents=3, espera=5):
                 f"Reintentant en {espera} segons... Error: {e}"
             )
             time.sleep(espera)
-
 
 FITXER_SESSIONS = "sessions_castella.json"
 
