@@ -12,7 +12,7 @@ FITXER_MEMORIA = "memoria.json"
 
 SYSTEM_PROMPT = """Ets un assistent acadèmic intel·ligent dissenyat per ajudar estudiants de batxillerat i ESO a aprendre i comprendre matèries escolars.
 
-Actua com un profesional de la docència
+Actua com un profesional de la docència.
 
 El teu objectiu és ajudar l'estudiant a entendre els conceptes, no simplement donar-li les respostes. Guia'l amb preguntes, exemples i explicacions clares.
 
@@ -48,94 +48,31 @@ def inicialitzar_client():
     return genai.Client(api_key=api_key)
 
 
-def carregar_historial(fitxer=FITXER_MEMORIA):
-    if not os.path.exists(fitxer):
-        return []
-    try:
-        with open(fitxer, "r", encoding="utf-8") as f:
-            dades = json.load(f)
-        historial = []
-        for missatge in dades:
-            historial.append(
-                types.Content(
-                    role=missatge["role"],
-                    parts=[types.Part.from_text(text=missatge["text"])]
-                )
-            )
-        return historial
-    except Exception:
-        return []
-
-
-def guardar_historial(historial, fitxer=FITXER_MEMORIA):
-    try:
-        dades = [
-            {"role": missatge.role, "text": missatge.parts[0].text}
-            for missatge in historial
-        ]
-        with open(fitxer, "w", encoding="utf-8") as f:
-            json.dump(dades, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"⚠ Error en guardar memòria: {e}")
-
-
-def netejar_historial(fitxer=FITXER_MEMORIA):
-    if os.path.exists(fitxer):
-        os.remove(fitxer)
-    return []
-
-
-def exportar_conversa(historial):
-    if not historial:
-        return None
-
-    ara = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    nom_fitxer = f"conversa_{ara}.txt"
-
-    with open(nom_fitxer, "w", encoding="utf-8") as f:
-        f.write("=" * 60 + "\n")
-        f.write("   ASSISTENT ACADÈMIC — Conversa exportada\n")
-        f.write(f"   Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}\n")
-        f.write("=" * 60 + "\n\n")
-
-        for missatge in historial:
-            if missatge.role == "user":
-                f.write("👤 TU:\n")
-            elif missatge.role == "model":
-                f.write("🤖 ASSISTENT:\n")
-            else:
-                continue
-            f.write(f"{missatge.parts[0].text}\n\n")
-            f.write("-" * 40 + "\n\n")
-
-    return nom_fitxer
-
-
 def obtenir_model_actiu(client=None):
-    """Retorna un model vàlid i compatible amb l'API de Gemini."""
+    """Detecta dinàmicament el model actiu o utilitza el model estable per defecte."""
     if client:
         try:
             for m in client.models.list():
-                if hasattr(m, "supported_actions") and "generateContent" in m.supported_actions:
-                    nom = m.name.replace("models/", "")
-                    if "flash" in nom:
-                        return nom
+                nom = getattr(m, "name", "").replace("models/", "")
+                if "gemini-1.5-flash" in nom:
+                    return nom
         except Exception:
             pass
-    return "gemini-2.5-flash"
+    return "gemini-2.0-flash"
 
 
-def generar_resposta_amb_reintents(client, historial, reintents=3, espera=5):
+def generar_resposta_amb_reintents(client, historial, system_prompt=SYSTEM_PROMPT, reintents=3, espera=3):
+    """Funció unificada per enviar peticions a Gemini sense bloquejos."""
+    model_actiu = obtenir_model_actiu(client)
     for intent in range(reintents):
         try:
-            model_actiu = obtenir_model_actiu(client)
             response = client.models.generate_content(
                 model=model_actiu,
                 contents=historial,
-                config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+                config=types.GenerateContentConfig(system_instruction=system_prompt),
             )
-            return response
+            return response.text
         except Exception as e:
             if intent == reintents - 1:
-                raise e
+                return f"❌ Error de connexió amb Gemini ({model_actiu}): {e}"
             time.sleep(espera)
