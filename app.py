@@ -87,7 +87,6 @@ def generar_titol(primer_missatge: str) -> str:
     return titol[:30] + "…" if len(titol) > 30 else titol
 
 def generar_resposta_app(historial_raw, system_prompt):
-    # Convertim l'historial intern al format de l'SDK de Gemini
     contingut = [
         types.Content(
             role=m["role"],
@@ -95,7 +94,7 @@ def generar_resposta_app(historial_raw, system_prompt):
         )
         for m in historial_raw
     ]
-    model_actiu = obtenir_model_actiu()
+    model_actiu = obtenir_model_actiu(client)
     try:
         response = client.models.generate_content(
             model=model_actiu,

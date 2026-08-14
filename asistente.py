@@ -111,14 +111,24 @@ def exportar_conversa(historial):
     return nom_fitxer
 
 
-def obtenir_model_actiu():
-    return "gemini-1.5-flash"
+def obtenir_model_actiu(client=None):
+    """Retorna un model vàlid i compatible amb l'API de Gemini."""
+    if client:
+        try:
+            for m in client.models.list():
+                if hasattr(m, "supported_actions") and "generateContent" in m.supported_actions:
+                    nom = m.name.replace("models/", "")
+                    if "flash" in nom:
+                        return nom
+        except Exception:
+            pass
+    return "gemini-2.5-flash"
 
 
 def generar_resposta_amb_reintents(client, historial, reintents=3, espera=5):
     for intent in range(reintents):
         try:
-            model_actiu = obtenir_model_actiu()
+            model_actiu = obtenir_model_actiu(client)
             response = client.models.generate_content(
                 model=model_actiu,
                 contents=historial,
